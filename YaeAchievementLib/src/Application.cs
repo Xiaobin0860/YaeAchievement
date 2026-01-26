@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Yae.Utilities;
 using static Yae.GameMethod;
@@ -26,11 +25,8 @@ internal static unsafe class Application {
         Native.WaitMainWindow();
         Log.ResetConsole();
         //
-        RecordChecksum();
-        MinHook.Attach(DoCmd, &OnDoCmd, out _doCmd);
         MinHook.Attach(ToInt32, &OnToInt32, out _toInt32);
         MinHook.Attach(UpdateNormalProp, &OnUpdateNormalProp, out _updateNormalProp);
-        MinHook.Attach(EventSystemUpdate, &OnEventSystemUpdate, out _eventSystemUpdate);
         return 0;
     }
 
@@ -141,74 +137,6 @@ internal static unsafe class Application {
         _updateNormalProp(@this, type, value, lastValue, state);
         if (RequiredPlayerProperties.Remove(type)) {
             Goshujin.PushPlayerProp(type, value);
-        }
-    }
-
-    #endregion
-
-    #region Checksum
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct RecordChecksumCmdData {
-
-        public int Type;
-
-        public void* Buffer;
-
-        public int Length;
-
-    }
-
-    private static readonly RecordChecksumCmdData[] RecordedChecksum = new RecordChecksumCmdData[3];
-
-    private static void RecordChecksum() {
-        for (var i = 0; i < 3; i++) {
-            var buffer = NativeMemory.AllocZeroed(256);
-            var data = new RecordChecksumCmdData {
-                Type = i,
-                Buffer = buffer,
-                Length = 256
-            };
-            _ = DoCmd(23, Unsafe.AsPointer(ref data), sizeof(RecordChecksumCmdData));
-            RecordedChecksum[i] = data;
-            //REPL//Log.Trace($"nType={i}, value={new string((sbyte*) buffer, 0, data.Length)}");
-        }
-    }
-
-    private static delegate*unmanaged<int, void*, int, int> _doCmd;
-
-    [UnmanagedCallersOnly]
-    public static int OnDoCmd(int cmdType, void* data, int size) {
-        var result = _doCmd(cmdType, data, size);
-        if (cmdType == 23) {
-            var cmdData = (RecordChecksumCmdData*) data;
-            if (cmdData->Type < 3) {
-                var recordedData = RecordedChecksum[cmdData->Type];
-                cmdData->Length = recordedData.Length;
-                Buffer.MemoryCopy(recordedData.Buffer, cmdData->Buffer, recordedData.Length, recordedData.Length);
-                //REPL//Log.Trace($"Override type {cmdData->Type} result");
-            }
-        }
-        return result;
-    }
-
-    #endregion
-
-    #region EnterGate
-
-    private static long _lastTryEnterTime;
-    
-    private static delegate*unmanaged<nint, void> _eventSystemUpdate;
-
-    [UnmanagedCallersOnly]
-    public static void OnEventSystemUpdate(nint @this) {
-        _eventSystemUpdate(@this);
-        if (Environment.TickCount64 - _lastTryEnterTime > 200) {
-            var obj = FindGameObject(NewString("BtnStart"u8.AsPointer()));
-            if (obj != 0 && SimulatePointerClick(@this, obj)) {
-                MinHook.Detach((nint) EventSystemUpdate);
-            }
-            _lastTryEnterTime = Environment.TickCount64;
         }
     }
 
