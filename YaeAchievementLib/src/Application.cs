@@ -98,7 +98,7 @@ internal static unsafe class Application {
         return 0;
     }
 
-    private static ulong ReadRawVarInt64(this Span<byte> span, ref int offset) {
+    private static ulong ReadRawVarInt64(Span<byte> span, ref int offset) {
         ulong result = 0;
         for (var i = 0; i < 8; i++) {
             var b = span[offset++];
