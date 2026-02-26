@@ -80,59 +80,16 @@ public sealed class AchievementAllDataNotify {
         if (data.Count == 0) {
             return new AchievementAllDataNotify();
         }
-        uint tId, sId, iId, currentId, totalId;
-        if (data.All(CheckKnownFieldIdIsValid)) {
-            var info = GlobalVars.AchievementInfo.PbInfo;
-            iId = info.Id;
-            tId = info.FinishTimestamp;
-            sId = info.Status;
-            totalId = info.TotalProgress;
-            currentId = info.CurrentProgress;
-        } else if (data.Count > 20) {
-            (tId, var cnt) = data //        ↓ 2020-09-15 04:15:14
-                .GroupKeys(value => value > 1600114514).Select(g => (g.Key, g.Count())).MaxBy(p => p.Item2);
-            sId = data //           FINISHED ↓    ↓ REWARD_TAKEN
-                .GroupKeys(value => value is 2 or 3).First(g => g.Count() == cnt).Key;
-            iId = data //                                 ↓ id: 8xxxx
-                .GroupKeys(value => value / 10000 % 10 == 8).MaxBy(g => g.Count())!.Key;
-            (currentId, totalId) = data
-                .Where(d => d[sId] is 2 or 3)
-                .Select(d => d.ToDictionary().RemoveValues(tId, sId, iId).ToArray())
-                .Where(d => d.Length == 2 && d[0].Value != d[1].Value)
-                .GroupBy(a => a[0].Value > a[1].Value ? (a[0].Key, a[1].Key) : (a[1].Key, a[0].Key))
-                .Select(g => (FieldIds: g.Key, Count: g.Count()))
-                .MaxBy(p => p.Count)
-                .FieldIds;
-#if DEBUG
-            // ReSharper disable once LocalizableElement
-            AnsiConsole.WriteLine($"Id={iId}, Status={sId}, Total={totalId}, Current={currentId}, Timestamp={tId}");
-#endif
-        } else {
-            AnsiConsole.WriteLine(App.WaitMetadataUpdate);
-            Environment.Exit(0);
-            return null!;
-        }
+        var pb = GlobalVars.AchievementInfo.PbInfo;
         return new AchievementAllDataNotify {
             AchievementList = data.Select(dict => new AchievementItem {
-                Id = dict[iId],
-                Status = (AchievementStatus) dict[sId],
-                TotalProgress = dict[totalId],
-                CurrentProgress = dict.GetValueOrDefault(currentId),
-                FinishTimestamp = dict.GetValueOrDefault(tId),
+                Id = dict[pb.Id],
+                Status = (AchievementStatus) dict[pb.Status],
+                TotalProgress = dict[pb.TotalProgress],
+                CurrentProgress = dict.GetValueOrDefault(pb.CurrentProgress),
+                FinishTimestamp = dict.GetValueOrDefault(pb.FinishTimestamp),
             }).ToList()
         };
-        // ReSharper disable once ConvertIfStatementToSwitchStatement
-        static bool CheckKnownFieldIdIsValid(Dictionary<uint, uint> data) {
-            var info = GlobalVars.AchievementInfo;
-            var status = data.GetValueOrDefault(info.PbInfo.Status, 114514u);
-            if (status is 0 or > 3) {
-                return false;
-            }
-            if (status > 1 && data.GetValueOrDefault(info.PbInfo.FinishTimestamp) < 1600114514) { // 2020-09-15 04:15:14
-                return false;
-            }
-            return info.Items.ContainsKey(data.GetValueOrDefault(info.PbInfo.Id));
-        }
     }
 
 }
